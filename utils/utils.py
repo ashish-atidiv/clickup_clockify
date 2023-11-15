@@ -63,9 +63,49 @@ def get_clickup_lists(space_id):
         if response.status_code == 200:
             resp = response.json()
             lists = resp.get('lists')
-            return lists
+            #print(lists)
+            #return lists
         else:
-            return lists
+            #return lists
+            pass
+
+    except Exception as e:
+        print(str(e))
+
+    try:
+        folders = []
+        url = api.clickup_folders.format(space_id=space_id)
+
+        response = requests.get(url, headers=api.clickup_header)
+
+        if response.status_code == 200:
+            resp = response.json()
+            folders = resp.get('folders')
+            #print(folders)
+            #return folders
+        else:
+            #return lists
+            pass
+
+    except Exception as e:
+        print(str(e))
+
+    try:
+        for elm in folders:
+            folder_id = elm.get('id')
+            url = api.clickup_list_with_folder.format(folder_id=folder_id)
+
+            response = requests.get(url, headers=api.clickup_header)
+
+            if response.status_code == 200:
+                resp = response.json()
+                lists_1 = resp.get('lists')
+                #print(lists_1)
+                lists.extend(lists_1)
+                #print(lists)
+                return lists
+            else:
+                return lists
 
     except Exception as e:
         print(str(e))
@@ -77,7 +117,7 @@ def get_clockify_clients():
     try:
         
         response = requests.get(url=api.clockify_client_api, headers=api.clockify_header)
-
+        print("client response",response)
         if response.status_code == 200:
             resp = response.json()
             return resp
@@ -211,20 +251,21 @@ def fetch_all_clickup_tasks():
     if not db_pull_date:
         db_pull_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S') - timedelta(days=1)
     
-    unix_ts = get_unix_timestamp(db_pull_date, timedelay=5000)
+    unix_ts = get_unix_timestamp(db_pull_date, timedelay=14400)
 
     for spc in spaces:
     
         space_list = get_clickup_lists(spc['id']) if spc['id'] not in rejected_spaces else list()
-        for lst in space_list:
+        if space_list:
+            for lst in space_list:
 
-            tasks_df = get_clickup_tasks(lst['id'], unix_ts)
-            
-            master_tasks_df =  pd.concat([master_tasks_df, tasks_df])
+                tasks_df = get_clickup_tasks(lst['id'], unix_ts)
+                
+                master_tasks_df =  pd.concat([master_tasks_df, tasks_df])
 
-            print('{} Appended {} row to master_df. New master len {}'.format(datetime.now(), 
-                                                                              len(tasks_df), 
-                                                                              len(master_tasks_df)))
+                print('{} Appended {} row to master_df. New master len {}'.format(datetime.now(), 
+                                                                                len(tasks_df), 
+                                                                                len(master_tasks_df)))
 
         print('{} ended list {}\n\n'.format(datetime.now(), spc['name']))
 

@@ -73,28 +73,28 @@ def clickup_list(all_spaces):
     for idx, spc in all_spaces.iterrows():
         clickup_list = get_clickup_lists(spc['id']) if spc['id'] not in rejected_clickup_list else []
         # all_lists.extend(clickup_list) # onetime load
+        if clickup_list:
+            for elm in clickup_list:
+                try:
+                    if elm['id'] not in list_ids_in_projects: ## If this condition is true, project exists 
+                        list_name = elm.get('name')
+                        list_id = elm.get('id')
+                        list_space_id = space_client_mapping[spc['id']]
 
-        for elm in clickup_list:
-            try:
-                if elm['id'] not in list_ids_in_projects: ## If this condition is true, project exists 
-                    list_name = elm.get('name')
-                    list_id = elm.get('id')
-                    list_space_id = space_client_mapping[spc['id']]
+                        resp, json_response = create_clockify_projects(list_name, project_note = list_id, client_id= list_space_id )
+                        if resp == 201:
+                            all_lists.append(elm) ## to be used on incremental load
+                            success_response_list.append(json_response)
+                            clockify_projects.append(json_response)
+                        # resp['clickup_space_id'] = list_space_id
+                        # resp['clickup_list_id'] = list_id
+                        # resp['pull_date'] = pull_date
 
-                    resp, json_response = create_clockify_projects(list_name, project_note = list_id, client_id= list_space_id )
-                    if resp == 201:
-                        all_lists.append(elm) ## to be used on incremental load
-                        success_response_list.append(json_response)
-                        clockify_projects.append(json_response)
-                    # resp['clickup_space_id'] = list_space_id
-                    # resp['clickup_list_id'] = list_id
-                    # resp['pull_date'] = pull_date
+                        # temp_df = pd.DataFrame([resp])
+                        # new_projects_to_write_to_db = pd.concat([new_projects_to_write_to_db, temp_df])
 
-                    # temp_df = pd.DataFrame([resp])
-                    # new_projects_to_write_to_db = pd.concat([new_projects_to_write_to_db, temp_df])
-
-            except Exception as e:
-                print(str(e))
+                except Exception as e:
+                    print(str(e))
         
         # if len(clickup_list) == 0: print('NO LIST FETCHED FOR PROJECT {}-{}'.format(spc['id'], spc['name']))
     
@@ -159,10 +159,11 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
 
     # Remove ids of tasks which have been created 
     clickup_trimmed_df = clickup_df[~clickup_df['id'].isin(clockify_bq_task_list)].reset_index()
+    df_for_db = clickup_df[~clickup_df['id'].isin(clockify_bq_task_list)]
 
     print('{} tasks to be created '.format(len(clickup_trimmed_df)))
     
-    df2gcp(clickup_trimmed_df, db.CLICKUP_TASK, mode = 'append')
+    df2gcp(df_for_db, db.CLICKUP_TASK, mode = 'append')
 
     # -----------------------------------------------------------------------------------
     # CREATE NEW TASK ON CLOCKIFY
@@ -193,7 +194,7 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
     df_to_write = pd.DataFrame(new_task_created)
     df_to_write['pull_date'] = pull_date
     print('{} records to write to clockify_task and {} new tasks were found in clickup '.format(len(df_to_write), len(clickup_trimmed_df) ))
-    
+    print(df_to_write.head())
     # update succesfull task to BQ
     bq.df2gcp(df_to_write, db.CLOCKIFY_TASK, mode='append')
 
@@ -203,6 +204,7 @@ def main():
     clients = clickup_spaces()
   
     projects = clickup_list(clients)
+    # import ipdb; ipdb.set_trace()
     
     clickup_task_df = fetch_all_clickup_tasks()
     
@@ -276,6 +278,6 @@ def main():
 
 
     ''' ASANA SYNC '''
-    asana_data_pull()
+    #asana_data_pull()
 
 main()

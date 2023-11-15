@@ -92,7 +92,7 @@ def asana_data_pull():
         
         # # # ## ------------------------------------------------------------------------------
 
-        # import ipdb; ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
         new_task_created = []
         pull_date = current_date_time()
 
@@ -118,7 +118,7 @@ def asana_data_pull():
             except Exception as e: print(str(e)+ ' ' + elm['list_name'])
 
 
-        # import ipdb; ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
         df_to_write = pd.DataFrame(new_task_created)
         print('{} records to write to clockify_task '.format( len(df_to_write) ))
         

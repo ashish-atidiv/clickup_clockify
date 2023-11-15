@@ -14,6 +14,8 @@ clickup_base_url = 'https://api.clickup.com/api/v2'
 clickup_spaces = clickup_base_url+"/team/"+clickup_team_id+"/space"
 
 clickup_folders = clickup_base_url+"/space/{space_id}/folder"
+
+clickup_list_with_folder = clickup_base_url+"/folder/{folder_id}/list"  
 clickup_folderless_list = clickup_base_url+"/space/{space_id}/list"
 
 clickup_header = {"Authorization": env.clickup_token, "Content-Type": "application/json"}
