@@ -35,7 +35,7 @@ clockify_project_api = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/
 clockify_task_api = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/projects/{project_id}/tasks"
 
 clockify_header = {"X-Api-Key": env.clocify_token, "Content-Type": "application/json"}
-
+clockify_params = {"page-size": 1000}
 delete_clociky_task = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/projects/{projectId}/tasks/{taskId}"
 
 # /workspaces/{workspaceId}/projects/{projectId}/tasks/{taskId}

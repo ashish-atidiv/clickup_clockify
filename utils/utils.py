@@ -63,7 +63,7 @@ def get_clickup_lists(space_id):
         if response.status_code == 200:
             resp = response.json()
             lists = resp.get('lists')
-            #print(lists)
+            print(lists)
             #return lists
         else:
             #return lists
@@ -90,8 +90,9 @@ def get_clickup_lists(space_id):
     except Exception as e:
         print(str(e))
 
-    try:
+    try:        
         for elm in folders:
+            lists_1 = []
             folder_id = elm.get('id')
             url = api.clickup_list_with_folder.format(folder_id=folder_id)
 
@@ -103,13 +104,14 @@ def get_clickup_lists(space_id):
                 #print(lists_1)
                 lists.extend(lists_1)
                 #print(lists)
-                return lists
+                #return lists
             else:
-                return lists
+                #return lists
+                pass
 
     except Exception as e:
         print(str(e))
-
+    return lists
 
 # GET CLOCKIFY CLIENTS
 # ---------------------------------------------------------------
@@ -184,7 +186,7 @@ def create_clockify_projects(project_name, project_note, client_id):
 def get_clockify_projects():
     try:
         
-        response = requests.get(url=api.clockify_project_api, headers=api.clockify_header)
+        response = requests.get(url=api.clockify_project_api, headers=api.clockify_header,params = api.clockify_params)
         
         if response.status_code == 200:
             projects = response.json()
@@ -305,7 +307,8 @@ def get_clockify_clients_bq():
         df = bq.gcp2df(sql) 
 
         return df
-        # value_list = df.values.tolist()
+        value_list = df.values.tolist()
+        print(value_list)
 
     except Exception as E:
         print(str(E))

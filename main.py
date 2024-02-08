@@ -2,9 +2,10 @@ from utils.utils import *
 from utils.bigquery_utils import *
 import utils.db as db
 from asana_sync import asana_data_pull
-
+import os
 pull_date = current_date_time()
-
+credential_path = "./productivity-377410-c3d21ce41a17.json"
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credential_path
 
 def clickup_spaces():
 
@@ -62,26 +63,37 @@ def clickup_list(all_spaces):
     # all_spaces = gcp2df("select clickup_space_id as id, name from `{}.{}.{}`".format(bq.gcp_project, bq.bq_dataset, db.CLOCKIFY_CLIENT))
     # clockify_clients = get_clockify_clients() ## Redundant function, output not being used anywhere
     space_client_mapping = get_space_client_mapping()
-
+    
+    #import ipdb; ipdb.set_trace()
     clockify_projects = get_clockify_projects()
+    print(clockify_projects)
     list_ids_in_projects = [x['note'] for x in clockify_projects]
+    print("list_ids_in_projects",list_ids_in_projects)
 
     # new_projects_to_write_to_db = pd.DataFrame()
     rejected_clickup_list = get_clickup_rejected_spaces()
+    print("rejected_clickup_list",rejected_clickup_list)
     all_lists = []
     success_response_list = []
     for idx, spc in all_spaces.iterrows():
         clickup_list = get_clickup_lists(spc['id']) if spc['id'] not in rejected_clickup_list else []
         # all_lists.extend(clickup_list) # onetime load
+        print("space ",spc['id'], "clickup list  ", clickup_list )
         if clickup_list:
             for elm in clickup_list:
                 try:
+                    print(elm['id'])
                     if elm['id'] not in list_ids_in_projects: ## If this condition is true, project exists 
                         list_name = elm.get('name')
+                        print(list_name)
                         list_id = elm.get('id')
+                        print(list_id)
                         list_space_id = space_client_mapping[spc['id']]
-
+                        print(list_space_id)
+                        #import ipdb; ipdb.set_trace()
+                        print(create_clockify_projects(list_name, project_note = list_id, client_id= list_space_id ))
                         resp, json_response = create_clockify_projects(list_name, project_note = list_id, client_id= list_space_id )
+
                         if resp == 201:
                             all_lists.append(elm) ## to be used on incremental load
                             success_response_list.append(json_response)
