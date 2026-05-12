@@ -22,3 +22,5 @@ webserver-config.py
 
 # zip files
 *.zip
+tasks/*.csv
+.venv

@@ -1,7 +1,8 @@
 from decouple import config
 from envyaml import EnvYAML
 
-devMode = EnvYAML('config.yaml').get('dev_mode')
+_cfg = EnvYAML('config.yaml')
+devMode = _cfg.get('dev_mode')
 
 # ClickUp creds
 clickup_token = config('CLICKUP_TOKEN')
@@ -12,7 +13,5 @@ clocify_token = config('CLOCKIFY_TOKEN')
 clockify_workspace_id = config('CLOCKIFY_ATIDIV_WORKSPACE_ID')
 
 if devMode:
-    clocify_token = EnvYAML('config.yaml').get('dev').get('CLOCKIFY_TOKEN')
-    clockify_workspace_id = EnvYAML('config.yaml').get('dev').get('CLOCKIFY_ATIDIV_WORKSPACE_ID')
-
-asana_token = config('ASANA_TOKEN')
+    clocify_token = _cfg.get('dev').get('CLOCKIFY_TOKEN')
+    clockify_workspace_id = _cfg.get('dev').get('CLOCKIFY_ATIDIV_WORKSPACE_ID')

@@ -4,6 +4,31 @@ prod:
   rejected_clickup_space_ids:
     - 19203391
 
+  # Incremental Loading Configuration
+  # ---------------------------------
+  # Controls how far back to look when fetching ClickUp tasks incrementally.
+  # These settings can be overridden via command line arguments.
+  incremental_loading:
+    # lookback_days: Number of days to look back on FIRST RUN (when no previous data exists in BigQuery)
+    # - Used only when BigQuery table is empty or no pull_date exists
+    # - Calculates: fetch_date = current_time - lookback_days
+    # - Example: lookback_days=7 fetches tasks from last 7 days on first run
+    # - Override with: python main.py --lookback-days 7
+    lookback_days: 1
+
+    # buffer_seconds: Time buffer in seconds applied on SUBSEQUENT RUNS
+    # - Used when previous pull_date exists in BigQuery
+    # - Calculates: fetch_date = last_pull_date - buffer_seconds
+    # - Purpose: Catches tasks created/updated shortly before last sync (handles delays, timezone issues)
+    # - Example: buffer_seconds=14400 (4 hours) fetches tasks from 4 hours before last sync
+    # - Common values:
+    #   * 3600   = 1 hour (for frequent syncs, hourly jobs)
+    #   * 7200   = 2 hours (moderate buffer)
+    #   * 14400  = 4 hours (recommended default, catches timezone issues)
+    #   * 28800  = 8 hours (for less frequent syncs)
+    # - Override with: python main.py --buffer-seconds 7200
+    buffer_seconds: 14400
+
 dev:
-  CLOCKIFY_TOKEN: N2YyNGFhN2EtNzE4ZS00ZDQyLTg0YjEtNTllZDViNzFkY2Ey
-  CLOCKIFY_ATIDIV_WORKSPACE_ID: 64183c0e2b3f445fb93bba2e
+  CLOCKIFY_TOKEN: <>
+  CLOCKIFY_ATIDIV_WORKSPACE_ID: <>

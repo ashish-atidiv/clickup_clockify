@@ -1,0 +1,18 @@
+C:\Users\Ashish Agrawal\Documents\Codes\codebase\gcloud\productivity.json
+C:\Users\Ashish Agrawal\Documents\Codes\codebase\gcloud\.env
+
+# Dependencies
+venv/
+.venv/
+env/
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp

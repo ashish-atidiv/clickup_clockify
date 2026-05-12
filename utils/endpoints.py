@@ -39,16 +39,3 @@ clockify_params = {"page-size": 1000}
 delete_clociky_task = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/projects/{projectId}/tasks/{taskId}"
 
 # /workspaces/{workspaceId}/projects/{projectId}/tasks/{taskId}
-
-
-#---------------------------------------------------------------------------------------
-#  ASANA
-#---------------------------------------------------------------------------------------
-
-asana_base_url = 'https://app.asana.com/api/1.0'
-
-asana_header = {"Authorization": "Bearer "+env.asana_token, "Accept": "application/json"}
-
-asana_project_api = asana_base_url+'/projects?workspace=701236911131463&archived=false&opt_pretty=true'
-
-asana_task_api = asana_base_url+'/tasks?project={}&opt_pretty=true'
