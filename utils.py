@@ -1,10 +1,10 @@
-import utils.endpoints as api
+import endpoints as api
 import settings as env
 import requests
 import pandas as pd
 import json
-import utils.bigquery_utils as bq
-import utils.db as db
+import bigquery_utils as bq
+import db
 import logging
 from datetime import datetime, date, timedelta
 import time
@@ -263,9 +263,12 @@ def create_clockify_task(proj_id, task_name, clickup_list_id, clickup_task_id):
             return resp
         else:
             resp = response.json()
+            if response.status_code == 400 and resp.get("code") == 501:
+                logger.warning("Clockify task already exists: '%s'", task_name)
+                return {"id": clickup_task_id}
             logger.error("create_clockify_task failed for clickup_task=%s [%s]: %s",
                          clickup_task_id, response.status_code, resp)
-            return {}
+            return None
     except Exception as e:
         logger.error("create_clockify_task exception for clickup_task=%s: %s", clickup_task_id, e)
 

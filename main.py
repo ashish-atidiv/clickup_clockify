@@ -2,10 +2,14 @@ import os
 import logging
 import argparse
 import pandas as pd
+import functions_framework
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+# Local development only — Cloud Function uses the attached service account automatically.
+_creds = (
     "C:\\Users\\Ashish Agrawal\\Documents\\Codes\\codebase\\gcloud\\productivity.json"
 )
+if os.path.exists(_creds):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _creds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from utils.utils import (
+from utils import (
     get_clickup_spaces,
     get_clockify_clients_bq,
     create_clockify_client,
@@ -30,9 +34,9 @@ from utils.utils import (
     create_clockify_task,
     current_date_time,
 )
-from utils.bigquery_utils import gcp2df, df2gcp
-import utils.db as db
-import utils.bigquery_utils as bq
+from bigquery_utils import gcp2df, df2gcp
+import db
+import bigquery_utils as bq
 
 
 def parse_arguments():
@@ -205,7 +209,7 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
     clockify_bq_task_list = []
     try:
         clockify_bq_task = gcp2df(
-            "select distinct clickup_task_id from `{}.{}.{}`".format(
+            "select distinct id from `{}.{}.{}`".format(
                 bq.gcp_project, bq.bq_dataset, db.CLOCKIFY_TASK
             )
         ).values.tolist()
@@ -239,7 +243,7 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
                 if resp:
                     new_task_created.append(resp)
                 else:
-                    logger.warning("Task not created on Clockify: %s", elm["name"])
+                    logger.error("Task not created on Clockify: %s", elm["name"])
         except Exception as e:
             logger.error(
                 "clickup_tasks error for task '%s' (list: %s): %s",
@@ -250,8 +254,9 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
 
     df_to_write = pd.DataFrame(new_task_created)
     if not df_to_write.empty:
-        df_to_write["pull_date"] = current_date_time()
-        df2gcp(df_to_write, db.CLOCKIFY_TASK, mode="append")
+        clockify_task_cols = ["id", "name", "list_id", "list_name"]
+        cols = [c for c in clockify_task_cols if c in df_to_write.columns]
+        df2gcp(df_to_write[cols], db.CLOCKIFY_TASK, mode="append")
     logger.info(
         "%d tasks written to clockify_task. %d new tasks found in ClickUp.",
         len(df_to_write),
@@ -277,6 +282,19 @@ def main(lookback_days=None, buffer_seconds=None):
         logger.info("No new tasks fetched since last pull.")
 
     logger.info("Sync complete.")
+
+
+@functions_framework.http
+def run(request):
+    """Cloud Function HTTP entry point."""
+    lookback_days = request.args.get("lookback_days", default=None, type=int)
+    buffer_seconds = request.args.get("buffer_seconds", default=None, type=int)
+    try:
+        main(lookback_days=lookback_days, buffer_seconds=buffer_seconds)
+        return "Sync complete.", 200
+    except Exception as e:
+        logger.error("Sync failed: %s", e)
+        return f"Sync failed: {e}", 500
 
 
 if __name__ == "__main__":

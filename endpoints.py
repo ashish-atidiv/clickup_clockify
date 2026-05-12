@@ -15,7 +15,7 @@ clickup_spaces = clickup_base_url+"/team/"+clickup_team_id+"/space"
 
 clickup_folders = clickup_base_url+"/space/{space_id}/folder"
 
-clickup_list_with_folder = clickup_base_url+"/folder/{folder_id}/list"  
+clickup_list_with_folder = clickup_base_url+"/folder/{folder_id}/list"
 clickup_folderless_list = clickup_base_url+"/space/{space_id}/list"
 
 clickup_header = {"Authorization": env.clickup_token, "Content-Type": "application/json"}
@@ -37,5 +37,3 @@ clockify_task_api = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/pro
 clockify_header = {"X-Api-Key": env.clocify_token, "Content-Type": "application/json"}
 clockify_params = {"page-size": 1000}
 delete_clociky_task = clockify_base_url+"/workspaces/"+clockify_workspace_id+"/projects/{projectId}/tasks/{taskId}"
-
-# /workspaces/{workspaceId}/projects/{projectId}/tasks/{taskId}
