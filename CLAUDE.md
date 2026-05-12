@@ -69,57 +69,106 @@ main.py                 — ETL orchestrator: spaces → lists → tasks sync
 - HTTP 400 with `{"code": 501}` means the resource already exists — logged as WARNING, not error
 - Both `create_clockify_client` and `create_clockify_projects` return `None` / `(501, {})` on already-exists; callers handle this gracefully
 
-## Deploying to GCP
+## Deploying to GCP (Cloud Run via Docker)
 
-### Cloud Function (recommended — no Docker needed, max 60 min timeout)
+### Code is already deploy-ready
 
-1. Add `functions-framework==3.5.0` to `requirements.txt`
-2. Add an HTTP entry point to `main.py`:
-```python
-import functions_framework
+- `Dockerfile` and `.dockerignore` are included in the repo
+- `functions-framework==3.5.0` starts an HTTP server on `$PORT` — Cloud Run sets this automatically
+- `main.py` exposes `run(request)` decorated with `@functions_framework.http`
+- The local credential file (`productivity.json`) is excluded from the image via `.dockerignore`; Cloud Run uses the attached service account instead
 
-@functions_framework.http
-def run(request):
-    lookback_days = request.args.get('lookback_days', default=None, type=int)
-    buffer_seconds = request.args.get('buffer_seconds', default=None, type=int)
-    try:
-        main(lookback_days=lookback_days, buffer_seconds=buffer_seconds)
-        return "Sync complete.", 200
-    except Exception as e:
-        return f"Sync failed: {e}", 500
-```
-3. Remove the `os.environ['GOOGLE_APPLICATION_CREDENTIALS']` line from `main.py` — Cloud Function uses the attached service account automatically.
+### Step 1: Store secrets in Secret Manager
 
-Deploy:
 ```bash
-gcloud functions deploy clickup-sync \
-  --gen2 --runtime python311 --region us-central1 \
-  --source . --entry-point run --trigger-http \
+for SECRET in CLICKUP_TOKEN CLICKUP_TEAM_ID CLOCKIFY_TOKEN CLOCKIFY_ATIDIV_WORKSPACE_ID; do
+  echo -n "YOUR_VALUE" | gcloud secrets create $SECRET --data-file=-
+done
+```
+
+Or via Console: **Secret Manager** → Create secret for each variable, paste the value from your `.env`.
+
+### Step 2: Create a service account
+
+```bash
+gcloud iam service-accounts create clickup-sync-sa \
+  --display-name "ClickUp Sync Service Account" \
+  --project productivity-377410
+
+for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser roles/secretmanager.secretAccessor; do
+  gcloud projects add-iam-policy-binding productivity-377410 \
+    --member "serviceAccount:clickup-sync-sa@productivity-377410.iam.gserviceaccount.com" \
+    --role $ROLE
+done
+```
+
+### Step 3: Build and push the Docker image
+
+```bash
+# Configure Docker to use Artifact Registry
+gcloud auth configure-docker us-central1-docker.pkg.dev
+
+# Create Artifact Registry repo (first time only)
+gcloud artifacts repositories create clickup-sync \
+  --repository-format docker \
+  --location us-central1 \
+  --project productivity-377410
+
+# Build and push
+docker build -t us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest .
+docker push us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest
+```
+
+### Step 4: Deploy to Cloud Run
+
+```bash
+gcloud run deploy clickup-sync \
+  --image us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest \
+  --region us-central1 \
+  --platform managed \
   --no-allow-unauthenticated \
-  --service-account YOUR_SA@productivity-377410.iam.gserviceaccount.com \
-  --set-secrets CLICKUP_TOKEN=CLICKUP_TOKEN:latest \
-  --set-secrets CLICKUP_TEAM_ID=CLICKUP_TEAM_ID:latest \
-  --set-secrets CLOCKIFY_TOKEN=CLOCKIFY_TOKEN:latest \
-  --set-secrets CLOCKIFY_ATIDIV_WORKSPACE_ID=CLOCKIFY_ATIDIV_WORKSPACE_ID:latest \
-  --memory 512MB --timeout 3600s
+  --memory 512Mi \
+  --timeout 3600 \
+  --service-account clickup-sync-sa@productivity-377410.iam.gserviceaccount.com \
+  --set-secrets CLICKUP_TOKEN=CLICKUP_TOKEN:latest,CLICKUP_TEAM_ID=CLICKUP_TEAM_ID:latest,CLOCKIFY_TOKEN=CLOCKIFY_TOKEN:latest,CLOCKIFY_ATIDIV_WORKSPACE_ID=CLOCKIFY_ATIDIV_WORKSPACE_ID:latest \
+  --project productivity-377410
 ```
 
-### Cloud Run Job (for syncs that may exceed 60 min)
-
-Requires a `Dockerfile`. Same secret/service-account pattern. See Cloud Run Jobs docs.
-
-### Scheduling (Cloud Scheduler)
+### Step 5: Test locally with Docker
 
 ```bash
+docker build -t clickup-sync .
+docker run -p 8080:8080 \
+  -e PORT=8080 \
+  -e CLICKUP_TOKEN=your_token \
+  -e CLICKUP_TEAM_ID=your_team_id \
+  -e CLOCKIFY_TOKEN=your_token \
+  -e CLOCKIFY_ATIDIV_WORKSPACE_ID=your_workspace_id \
+  clickup-sync
+
+# In another terminal:
+curl http://localhost:8080
+# With optional overrides:
+curl "http://localhost:8080?lookback_days=7"
+```
+
+### Step 6: Schedule it (Cloud Scheduler)
+
+```bash
+# Get the Cloud Run service URL first
+SERVICE_URL=$(gcloud run services describe clickup-sync --region us-central1 --format 'value(status.url)')
+
 gcloud scheduler jobs create http clickup-sync-daily \
+  --location us-central1 \
   --schedule "0 6 * * *" \
-  --uri "https://us-central1-cloudfunctions.googleapis.com/v2/projects/productivity-377410/locations/us-central1/functions/clickup-sync" \
+  --uri "$SERVICE_URL" \
   --http-method POST \
-  --oidc-service-account-email YOUR_SA@productivity-377410.iam.gserviceaccount.com \
-  --location us-central1
+  --oidc-service-account-email clickup-sync-sa@productivity-377410.iam.gserviceaccount.com \
+  --project productivity-377410
 ```
 
 ### Required IAM roles for the service account
 
-- `roles/bigquery.dataEditor` — read/write BQ tables
-- `roles/secretmanager.secretAccessor` — read secrets
+- `BigQuery Data Editor` — read/write BQ tables
+- `BigQuery Job User` — run BQ query jobs
+- `Secret Manager Secret Accessor` — read secrets at runtime

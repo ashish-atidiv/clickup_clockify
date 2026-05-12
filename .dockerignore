@@ -1,0 +1,6 @@
+.env
+productivity.json
+.venv
+__pycache__
+.claude
+*.pyc
