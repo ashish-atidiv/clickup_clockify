@@ -69,13 +69,13 @@ main.py                 — ETL orchestrator: spaces → lists → tasks sync
 - HTTP 400 with `{"code": 501}` means the resource already exists — logged as WARNING, not error
 - Both `create_clockify_client` and `create_clockify_projects` return `None` / `(501, {})` on already-exists; callers handle this gracefully
 
-## Deploying to GCP (Cloud Run via Docker)
+## Deploying to GCP (Cloud Run Job via Docker)
 
 ### Code is already deploy-ready
 
 - `Dockerfile` and `.dockerignore` are included in the repo
-- `functions-framework==3.5.0` starts an HTTP server on `$PORT` — Cloud Run sets this automatically
-- `main.py` exposes `run(request)` decorated with `@functions_framework.http`
+- Container runs `python main.py` directly — no HTTP server needed
+- Logs stream to stdout; non-zero exit on failure triggers Cloud Run Job retry
 - The local credential file (`productivity.json`) is excluded from the image via `.dockerignore`; Cloud Run uses the attached service account instead
 
 ### Step 1: Store secrets in Secret Manager
@@ -95,7 +95,7 @@ gcloud iam service-accounts create clickup-sync-sa \
   --display-name "ClickUp Sync Service Account" \
   --project productivity-377410
 
-for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser roles/secretmanager.secretAccessor; do
+for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser roles/secretmanager.secretAccessor roles/run.invoker; do
   gcloud projects add-iam-policy-binding productivity-377410 \
     --member "serviceAccount:clickup-sync-sa@productivity-377410.iam.gserviceaccount.com" \
     --role $ROLE
@@ -119,14 +119,12 @@ docker build -t us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:
 docker push us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest
 ```
 
-### Step 4: Deploy to Cloud Run
+### Step 4: Create the Cloud Run Job
 
 ```bash
-gcloud run deploy clickup-sync \
+gcloud run jobs create clickup-sync \
   --image us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest \
   --region us-central1 \
-  --platform managed \
-  --no-allow-unauthenticated \
   --memory 512Mi \
   --timeout 3600 \
   --service-account clickup-sync-sa@productivity-377410.iam.gserviceaccount.com \
@@ -134,37 +132,52 @@ gcloud run deploy clickup-sync \
   --project productivity-377410
 ```
 
-### Step 5: Test locally with Docker
+To update an existing job after pushing a new image:
+```bash
+gcloud run jobs update clickup-sync \
+  --image us-central1-docker.pkg.dev/productivity-377410/clickup-sync/app:latest \
+  --region us-central1 --project productivity-377410
+```
+
+### Step 5: Schedule it (Cloud Scheduler)
+
+```bash
+gcloud scheduler jobs create http clickup-sync-daily \
+  --location us-central1 \
+  --schedule "0 6 * * *" \
+  --uri "https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/productivity-377410/jobs/clickup-sync:run" \
+  --http-method POST \
+  --oauth-service-account-email clickup-sync-sa@productivity-377410.iam.gserviceaccount.com \
+  --project productivity-377410
+```
+
+> Note: Cloud Run Jobs use **OAuth** (not OIDC) for the scheduler auth header.
+
+### Step 6: Test locally with Docker
 
 ```bash
 docker build -t clickup-sync .
-docker run -p 8080:8080 \
-  -e PORT=8080 \
+docker run \
   -e CLICKUP_TOKEN=your_token \
   -e CLICKUP_TEAM_ID=your_team_id \
   -e CLOCKIFY_TOKEN=your_token \
   -e CLOCKIFY_ATIDIV_WORKSPACE_ID=your_workspace_id \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
+  -v "C:/Users/Ashish Agrawal/Documents/Codes/codebase/gcloud/productivity.json:/app/credentials.json:ro" \
   clickup-sync
-
-# In another terminal:
-curl http://localhost:8080
-# With optional overrides:
-curl "http://localhost:8080?lookback_days=7"
 ```
 
-### Step 6: Schedule it (Cloud Scheduler)
+### Run job manually on Cloud Run
 
 ```bash
-# Get the Cloud Run service URL first
-SERVICE_URL=$(gcloud run services describe clickup-sync --region us-central1 --format 'value(status.url)')
+gcloud run jobs execute clickup-sync --region us-central1 --project productivity-377410
+```
 
-gcloud scheduler jobs create http clickup-sync-daily \
-  --location us-central1 \
-  --schedule "0 6 * * *" \
-  --uri "$SERVICE_URL" \
-  --http-method POST \
-  --oidc-service-account-email clickup-sync-sa@productivity-377410.iam.gserviceaccount.com \
-  --project productivity-377410
+### View execution logs
+
+```bash
+gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=clickup-sync" \
+  --project productivity-377410 --limit 100 --format "value(textPayload)"
 ```
 
 ### Required IAM roles for the service account
@@ -172,3 +185,4 @@ gcloud scheduler jobs create http clickup-sync-daily \
 - `BigQuery Data Editor` — read/write BQ tables
 - `BigQuery Job User` — run BQ query jobs
 - `Secret Manager Secret Accessor` — read secrets at runtime
+- `Cloud Run Invoker` — allows Cloud Scheduler to trigger the job

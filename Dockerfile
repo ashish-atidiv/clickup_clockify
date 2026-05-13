@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -13,4 +13,4 @@ COPY . .
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
-CMD exec functions-framework --target=run --port=$PORT
+CMD ["python", "main.py"]

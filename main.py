@@ -1,8 +1,8 @@
 import os
+import sys
 import logging
 import argparse
 import pandas as pd
-import functions_framework
 
 # Local development only — Cloud Function uses the attached service account automatically.
 _creds = (
@@ -15,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
 
@@ -284,19 +285,10 @@ def main(lookback_days=None, buffer_seconds=None):
     logger.info("Sync complete.")
 
 
-@functions_framework.http
-def run(request):
-    """Cloud Function HTTP entry point."""
-    lookback_days = request.args.get("lookback_days", default=None, type=int)
-    buffer_seconds = request.args.get("buffer_seconds", default=None, type=int)
-    try:
-        main(lookback_days=lookback_days, buffer_seconds=buffer_seconds)
-        return "Sync complete.", 200
-    except Exception as e:
-        logger.error("Sync failed: %s", e)
-        return f"Sync failed: {e}", 500
-
-
 if __name__ == "__main__":
     args = parse_arguments()
-    main(lookback_days=args.lookback_days, buffer_seconds=args.buffer_seconds)
+    try:
+        main(lookback_days=args.lookback_days, buffer_seconds=args.buffer_seconds)
+    except Exception as e:
+        logger.error("Sync failed: %s", e, exc_info=True)
+        sys.exit(1)
