@@ -177,7 +177,7 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
 
     clickup_task_df.drop(
         axis=1,
-        columns=["custom_fields", "dependencies", "group_assignees"],
+        columns=["custom_fields", "dependencies", "group_assignees", "checklists", "subtasks"],
         inplace=True,
         errors="ignore",
     )
@@ -186,6 +186,7 @@ def clickup_tasks(_all_clockify_projects, clickup_task_df):
         clickup_task_df["start_date"], errors="coerce"
     ).astype("Int64")
     clickup_task_df["due_date"] = clickup_task_df["due_date"].astype("string")
+    clickup_task_df["date_closed"] = clickup_task_df["date_closed"].astype("string")
     df2gcp(clickup_task_df, db.CLICKUP_TASK, mode="append")
 
     clickup_df = clickup_task_df[["id", "name", "list_id", "list_name"]]
