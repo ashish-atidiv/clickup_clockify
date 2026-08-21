@@ -198,17 +198,24 @@ def fetch_all_clickup_tasks(lookback_days=None, buffer_seconds=None):
     logger.info("Incremental config: lookback_days=%s, buffer_seconds=%s",
                 effective_lookback_days, effective_buffer_seconds)
 
-    db_pull_date = bq.gcp2df(
-        "select max(pull_date) from `{}.{}.{}`".format(bq.gcp_project, bq.bq_dataset, db.CLICKUP_TASK)
-    ).values[0][0]
-
-    if not db_pull_date:
-        db_pull_date = (datetime.now() - timedelta(days=effective_lookback_days)).strftime('%Y-%m-%d %H:%M:%S')
-        logger.info("No previous pull_date found. Using lookback: %s days → %s", effective_lookback_days, db_pull_date)
+    if lookback_days is not None:
+        # Explicit CLI override — ignore prior pull_date and fetch from N days ago.
+        forced_date = (datetime.now() - timedelta(days=effective_lookback_days)).strftime('%Y-%m-%d %H:%M:%S')
+        logger.info("--lookback-days override: fetching from %s (%d days back, ignoring prior pull_date)",
+                    forced_date, effective_lookback_days)
+        unix_ts = get_unix_timestamp(forced_date, buffer_seconds=0)
     else:
-        logger.info("Previous pull_date: %s. Applying %ss buffer.", db_pull_date, effective_buffer_seconds)
+        db_pull_date = bq.gcp2df(
+            "select max(pull_date) from `{}.{}.{}`".format(bq.gcp_project, bq.bq_dataset, db.CLICKUP_TASK)
+        ).values[0][0]
 
-    unix_ts = get_unix_timestamp(db_pull_date, buffer_seconds=effective_buffer_seconds)
+        if not db_pull_date:
+            db_pull_date = (datetime.now() - timedelta(days=effective_lookback_days)).strftime('%Y-%m-%d %H:%M:%S')
+            logger.info("No previous pull_date found. Using lookback: %s days → %s", effective_lookback_days, db_pull_date)
+        else:
+            logger.info("Previous pull_date: %s. Applying %ss buffer.", db_pull_date, effective_buffer_seconds)
+
+        unix_ts = get_unix_timestamp(db_pull_date, buffer_seconds=effective_buffer_seconds)
 
     for spc in spaces:
         space_name = spc.get('name', spc['id'])
